@@ -26,19 +26,23 @@
       width: 100%;
       max-width: 560px;
     }
-    label { display: block; font-size: 0.8rem; color: #aaa; margin-bottom: 8px; }
+    label { display: block; font-size: 0.8rem; color: #aaa; margin-bottom: 6px; }
+    small { display: block; font-size: 0.72rem; color: #555; margin-bottom: 14px; }
+    input[type="email"],
     input[type="file"] {
       width: 100%;
       background: #111;
       border: 1px dashed #444;
       border-radius: 6px;
-      padding: 14px;
+      padding: 12px 14px;
       color: #ccc;
       font-family: inherit;
       font-size: 0.85rem;
       cursor: pointer;
-      margin-bottom: 16px;
+      margin-bottom: 4px;
     }
+    input[type="email"] { cursor: text; margin-bottom: 4px; }
+    input[type="email"]:focus { outline: none; border-color: #7c3aed; }
     button {
       width: 100%;
       background: #7c3aed;
@@ -50,19 +54,23 @@
       font-family: inherit;
       cursor: pointer;
       transition: background 0.2s;
+      margin-top: 16px;
     }
     button:hover:not(:disabled) { background: #6d28d9; }
-    button:disabled { background: #3b2e5a; cursor: not-allowed; }
+    button:disabled { background: #3b2e5a; cursor: not-allowed; opacity: 0.6; }
     #status {
       margin-top: 20px;
       font-size: 0.82rem;
-      padding: 12px;
+      padding: 12px 14px;
       border-radius: 6px;
       display: none;
+      line-height: 1.6;
     }
-    #status.ok  { background: #14291a; border: 1px solid #1f6b30; color: #4ade80; }
-    #status.err { background: #2a1010; border: 1px solid #6b1f1f; color: #f87171; }
-    #status.info{ background: #1a1a2a; border: 1px solid #3b3b6b; color: #93c5fd; }
+    #status.ok     { background: #14291a; border: 1px solid #1f6b30; color: #4ade80; }
+    #status.warn   { background: #292310; border: 1px solid #6b5a1f; color: #fbbf24; }
+    #status.err    { background: #2a1010; border: 1px solid #6b1f1f; color: #f87171; }
+    #status.info   { background: #1a1a2a; border: 1px solid #3b3b6b; color: #93c5fd; }
+    #req-id { font-size: 0.7rem; color: #444; margin-top: 10px; }
     .outputs { margin-top: 28px; display: none; }
     .outputs h2 { font-size: 0.9rem; color: #aaa; margin-bottom: 16px; }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -81,16 +89,8 @@
       background: repeating-conic-gradient(#222 0% 25%, #1a1a1a 0% 50%) 0 0 / 12px 12px;
     }
     .thumb span { display: block; font-size: 0.7rem; color: #666; margin-top: 6px; }
-    .thumb a {
-      display: inline-block;
-      margin-top: 5px;
-      font-size: 0.68rem;
-      color: #a78bfa;
-      text-decoration: none;
-    }
+    .thumb a { display: inline-block; margin-top: 4px; font-size: 0.68rem; color: #a78bfa; text-decoration: none; }
     .thumb a:hover { text-decoration: underline; }
-    pre { font-size: 0.72rem; white-space: pre-wrap; word-break: break-all; }
-    #req-id { font-size: 0.72rem; color: #555; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -98,9 +98,14 @@
   <p class="sub">Upload a logo &rarr; get silhouette, edge, and grayscale &mdash; emailed automatically.</p>
 
   <div class="card">
-    <label for="fileInput">Select image (PNG or JPG, max 5 MB)</label>
+    <label for="recipientEmail">Send processed images to:</label>
+    <input type="email" id="recipientEmail" placeholder="your@email.com" required />
+    <small>We'll email your 3 processed images to this address.</small>
+
+    <label for="fileInput">Select image (PNG or JPG, max 5 MB):</label>
     <input type="file" id="fileInput" accept="image/png,image/jpeg" />
-    <button id="btn" onclick="submit()">Process &amp; Send Email</button>
+
+    <button id="btn" disabled onclick="submit()">Process &amp; Send Email</button>
     <div id="status"></div>
     <p id="req-id"></p>
   </div>
@@ -127,13 +132,19 @@
   </div>
 
   <script>
+    const emailEl   = document.getElementById('recipientEmail');
+    const fileEl    = document.getElementById('fileInput');
+    const btn       = document.getElementById('btn');
+
+    function checkReady() {
+      btn.disabled = !(emailEl.checkValidity() && fileEl.files.length > 0);
+    }
+    emailEl.addEventListener('input', checkReady);
+    fileEl.addEventListener('change', checkReady);
+
     async function submit() {
-      const fileInput = document.getElementById('fileInput');
-      const btn       = document.getElementById('btn');
       const outputsEl = document.getElementById('outputs');
       const reqIdEl   = document.getElementById('req-id');
-
-      if (!fileInput.files.length) { showStatus('Please select a file first.', 'err'); return; }
 
       btn.disabled = true;
       btn.textContent = 'Processing...';
@@ -142,35 +153,43 @@
       reqIdEl.textContent = '';
 
       const formData = new FormData();
-      formData.append('file', fileInput.files[0]);
+      formData.append('recipient_email', emailEl.value.trim());
+      formData.append('file', fileEl.files[0]);
 
       try {
         const res  = await fetch('/process', { method: 'POST', body: formData });
         const json = await res.json();
 
         if (!res.ok) {
-          showStatus('Error ' + res.status + ': ' + (json.detail || JSON.stringify(json)), 'err');
+          showStatus('Error ' + res.status + ': ' + (json.detail || 'Unknown error.'), 'err');
           return;
         }
 
         reqIdEl.textContent = 'Request ID: ' + json.request_id;
 
-        const emailLine = json.email_status === 'sent'
-          ? 'Email sent with 3 attachments.'
-          : json.email_status === 'failed'
-            ? 'Email failed — check server logs.'
-            : 'Email: ' + json.email_status;
+        if (json.email_status === 'sent') {
+          const sentTo = json.sent_to || emailEl.value;
+          showStatus(
+            'Processing complete.\n'
+            + 'Silhouette: ' + json.silhouette
+            + ' | Border: '  + json.border
+            + ' | Grayscale: '+ json.grayscale + '\n'
+            + 'Sent to: ' + sentTo,
+            'ok'
+          );
+        } else {
+          // Processing worked but email failed — amber, no stack trace exposed
+          console.error('Email failure detail (server logged):', json);
+          showStatus(
+            'Processing complete.\n'
+            + 'Silhouette: ' + json.silhouette
+            + ' | Border: '  + json.border
+            + ' | Grayscale: '+ json.grayscale + '\n'
+            + 'Email could not be sent. Please contact the site owner.',
+            'warn'
+          );
+        }
 
-        showStatus(
-          'Processing complete.\n'
-          + 'Silhouette: ' + json.silhouette
-          + ' | Border: '  + json.border
-          + ' | Grayscale: '+ json.grayscale + '\n'
-          + emailLine,
-          json.email_status === 'failed' ? 'err' : 'ok'
-        );
-
-        // Display actual processed images from base64
         if (json.images && Object.keys(json.images).length > 0) {
           for (const name of ['silhouette', 'border', 'grayscale']) {
             const b64 = json.images[name];
@@ -184,10 +203,12 @@
         }
 
       } catch (err) {
-        showStatus('Network error: ' + err.message, 'err');
+        console.error(err);
+        showStatus('Network error — please try again.', 'err');
       } finally {
         btn.disabled = false;
         btn.textContent = 'Process & Send Email';
+        checkReady();
       }
     }
 
@@ -195,7 +216,7 @@
       const el = document.getElementById('status');
       el.className = type;
       el.style.display = 'block';
-      el.innerHTML = '<pre>' + msg + '</pre>';
+      el.textContent = msg;
     }
   </script>
 </body>

@@ -7,9 +7,10 @@ class ProcessResponse(BaseModel):
     silhouette: Literal["generated", "failed"]
     border: Literal["generated", "failed"]
     grayscale: Literal["generated", "failed"]
-    email_status: str  # "sent", "pending", or "failed: <error detail>"
+    email_status: Literal["sent", "failed"]
+    sent_to: str = ""
     message: str = ""
-    images: dict[str, str] = {}  # base64-encoded PNG for each output
+    images: dict[str, str] = {}
 
 
 class HealthResponse(BaseModel):

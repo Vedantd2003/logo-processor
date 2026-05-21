@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -40,11 +40,18 @@ _frontend_dir = Path(__file__).parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(_frontend_dir)), name="static")
 
 
+@app.on_event("startup")
+async def _startup() -> None:
+    provider = settings.email_provider
+    if provider == "resend" and not settings.resend_api_key:
+        raise RuntimeError("EMAIL_PROVIDER=resend but RESEND_API_KEY is not set")
+    logger.info("Email provider active: %s", provider)
+
+
 def _get_email_sender() -> EmailSender:
-    # Prefer Resend if key is set — it uses HTTPS, works reliably on all cloud hosts
-    if settings.resend_api_key:
-        return ResendSender(settings.resend_api_key, settings.resend_from)
     if settings.email_provider == "resend":
+        if not settings.resend_api_key:
+            raise ValueError("EMAIL_PROVIDER=resend but RESEND_API_KEY is empty")
         return ResendSender(settings.resend_api_key, settings.resend_from)
     return SmtpSender(
         settings.smtp_host,
@@ -54,8 +61,8 @@ def _get_email_sender() -> EmailSender:
     )
 
 
-def _send_email(request_id: str, attachment_paths: list[Path]) -> str:
-    """Send email synchronously. Returns 'sent' or 'failed'."""
+def _send_email(to: str, request_id: str, attachment_paths: list[Path]) -> str:
+    """Send email synchronously. Returns 'sent' or 'failed' (detail logged server-side)."""
     try:
         sender = _get_email_sender()
         body = (
@@ -68,16 +75,17 @@ def _send_email(request_id: str, attachment_paths: list[Path]) -> str:
             f"  - grayscale.png — grayscale version\n"
         )
         sender.send(
-            to=settings.recipient_email,
+            to=to,
             subject="Processed Logo Output Results",
             body=body,
             attachments=attachment_paths,
         )
-        logger.info("Email sent for request %s", request_id)
+        logger.info("Email sent to %s for request %s", to, request_id)
         return "sent"
     except Exception as exc:
-        logger.error("Email failed for request %s: %s", request_id, exc)
-        return f"failed: {type(exc).__name__}: {exc}"
+        logger.error("Email failed for request %s to %s: %s: %s",
+                     request_id, to, type(exc).__name__, exc)
+        return "failed"
 
 
 @app.get("/healthz", response_model=HealthResponse, tags=["System"])
@@ -93,10 +101,11 @@ async def index():
 
 @app.post("/process", response_model=ProcessResponse, tags=["Processing"])
 async def process_image(
+    recipient_email: str = Form(..., description="Email address to send results to"),
     file: UploadFile = File(..., description="PNG or JPG image, max 5 MB"),
 ) -> ProcessResponse:
     request_id = str(uuid.uuid4())
-    logger.info("Processing request %s — file: %s", request_id, file.filename)
+    logger.info("Request %s — file: %s — recipient: %s", request_id, file.filename, recipient_email)
 
     data = await file.read()
     try:
@@ -113,14 +122,12 @@ async def process_image(
         except RuntimeError as exc:
             raise HTTPException(status_code=500, detail=str(exc))
 
-        # Encode each output as base64 for inline preview in the response
         images_b64: dict[str, str] = {}
         for name, path in proc_results.items():
             images_b64[name] = base64.b64encode(path.read_bytes()).decode()
 
-        # Send email synchronously so status is real in the response
         attachment_paths = list(proc_results.values())
-        email_status = _send_email(request_id, attachment_paths)
+        email_status = _send_email(recipient_email, request_id, attachment_paths)
 
     except HTTPException:
         raise
@@ -133,6 +140,7 @@ async def process_image(
         border="generated" if "border" in proc_results else "failed",
         grayscale="generated" if "grayscale" in proc_results else "failed",
         email_status=email_status,
+        sent_to=recipient_email,
         images=images_b64,
         message="Processing complete.",
     )
