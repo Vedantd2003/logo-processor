@@ -41,6 +41,9 @@ app.mount("/static", StaticFiles(directory=str(_frontend_dir)), name="static")
 
 
 def _get_email_sender() -> EmailSender:
+    # Prefer Resend if key is set — it uses HTTPS, works reliably on all cloud hosts
+    if settings.resend_api_key:
+        return ResendSender(settings.resend_api_key, settings.resend_from)
     if settings.email_provider == "resend":
         return ResendSender(settings.resend_api_key, settings.resend_from)
     return SmtpSender(
@@ -74,7 +77,7 @@ def _send_email(request_id: str, attachment_paths: list[Path]) -> str:
         return "sent"
     except Exception as exc:
         logger.error("Email failed for request %s: %s", request_id, exc)
-        return "failed"
+        return f"failed: {type(exc).__name__}: {exc}"
 
 
 @app.get("/healthz", response_model=HealthResponse, tags=["System"])

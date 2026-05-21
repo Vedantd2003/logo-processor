@@ -7,7 +7,7 @@ class ProcessResponse(BaseModel):
     silhouette: Literal["generated", "failed"]
     border: Literal["generated", "failed"]
     grayscale: Literal["generated", "failed"]
-    email_status: Literal["sent", "failed", "pending"]
+    email_status: str  # "sent", "pending", or "failed: <error detail>"
     message: str = ""
     images: dict[str, str] = {}  # base64-encoded PNG for each output
 
