@@ -3,12 +3,44 @@ import numpy as np
 from .base import ImageProcessor
 
 
-def _auto_invert_if_needed(binary: np.ndarray) -> np.ndarray:
-    """Flip binary mask if foreground covers more than 50% — logos are rarely full-frame."""
-    foreground_ratio = np.sum(binary > 0) / binary.size
-    if foreground_ratio > 0.5:
-        return cv2.bitwise_not(binary)
-    return binary
+def _extract_foreground_mask(image: np.ndarray) -> np.ndarray:
+    """Return a binary mask of foreground pixels, handling dark and light backgrounds."""
+    channels = image.shape[2] if image.ndim == 3 else 1
+    h, w = image.shape[:2]
+
+    if channels == 4:
+        alpha = image[:, :, 3]
+        return (alpha > 10).astype(np.uint8) * 255
+
+    if channels == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+
+    # Sample corner + edge pixels to estimate background brightness
+    border_pixels = np.concatenate([
+        gray[0, :], gray[-1, :], gray[:, 0], gray[:, -1]
+    ])
+    bg_brightness = float(np.median(border_pixels))
+    bg_is_dark = bg_brightness < 80
+
+    if bg_is_dark and channels == 3:
+        # Use HSV value + saturation to find non-background pixels
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        v = hsv[:, :, 2]
+        s = hsv[:, :, 1]
+        # Pixels that are bright OR colorful are foreground
+        mask = np.zeros((h, w), dtype=np.uint8)
+        mask[(v.astype(int) > 45) | (s.astype(int) > 35)] = 255
+    else:
+        # Light background: Otsu threshold
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        _, mask = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        # Invert if more than half the image is "foreground" (background got detected)
+        if np.sum(mask > 0) > 0.5 * mask.size:
+            mask = cv2.bitwise_not(mask)
+
+    return mask
 
 
 class SilhouetteProcessor(ImageProcessor):
@@ -16,32 +48,19 @@ class SilhouetteProcessor(ImageProcessor):
 
     def process(self, image: np.ndarray) -> np.ndarray:
         h, w = image.shape[:2]
-        channels = image.shape[2] if image.ndim == 3 else 1
 
-        if channels == 4:
-            # Use alpha channel as mask directly
-            alpha = image[:, :, 3]
-            mask = (alpha > 10).astype(np.uint8) * 255
-        else:
-            # Convert to grayscale and threshold
-            if channels == 3:
-                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            else:
-                gray = image
+        mask = _extract_foreground_mask(image)
 
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            _, binary = cv2.threshold(
-                blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
-            )
-            mask = _auto_invert_if_needed(binary)
+        # Morphological closing to fill internal gaps
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=3)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel, iterations=1)
 
-        # Morphological closing to fill internal holes
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-
-        # Find external contours and draw filled shapes
+        # Find external contours and draw solid fill
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        canvas = np.zeros((h, w, 4), dtype=np.uint8)
-        cv2.drawContours(canvas, contours, -1, (0, 0, 0, 255), thickness=cv2.FILLED)
+
+        # White background, black silhouette — clearly visible on any display
+        canvas = np.ones((h, w, 3), dtype=np.uint8) * 255
+        cv2.drawContours(canvas, contours, -1, (0, 0, 0), thickness=cv2.FILLED)
 
         return canvas
