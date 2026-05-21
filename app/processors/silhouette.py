@@ -56,20 +56,23 @@ class SilhouetteProcessor(ImageProcessor):
         # Step 1: rough foreground mask
         mask = _extract_foreground_mask(image)
 
-        # Step 2: morphological closing to bridge nearby regions
-        k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k_close, iterations=4)
+        # Step 2: moderate closing to bridge nearby gaps without merging everything
+        k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k_close, iterations=2)
 
-        # Step 3: flood-fill to eliminate all interior holes
+        # Step 3: flood-fill to eliminate interior holes
         mask = _fill_holes(mask)
 
-        # Step 4: slight dilation so the silhouette fully covers the subject
-        k_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        mask = cv2.dilate(mask, k_dilate, iterations=1)
-
-        # Step 5: draw the largest external contours as solid fill
+        # Step 4: keep only the largest contour(s) — filters out noise blobs
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        canvas = np.ones((h, w, 3), dtype=np.uint8) * 255  # white background
+        if contours:
+            # Sort by area descending, keep contours that are at least 5% of the largest
+            contours = sorted(contours, key=cv2.contourArea, reverse=True)
+            max_area = cv2.contourArea(contours[0])
+            contours = [c for c in contours if cv2.contourArea(c) >= 0.05 * max_area]
+
+        # Step 5: draw solid fill on white background
+        canvas = np.ones((h, w, 3), dtype=np.uint8) * 255
         cv2.drawContours(canvas, contours, -1, (0, 0, 0), thickness=cv2.FILLED)
 
         return canvas
