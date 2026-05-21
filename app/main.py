@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
+from .email.brevo_sender import BrevoSender
 from .email.resend_sender import ResendSender
 from .email.sender import EmailSender
 from .email.smtp_sender import SmtpSender
@@ -45,10 +46,16 @@ async def _startup() -> None:
     provider = settings.email_provider
     if provider == "resend" and not settings.resend_api_key:
         raise RuntimeError("EMAIL_PROVIDER=resend but RESEND_API_KEY is not set")
+    if provider == "brevo" and not settings.brevo_smtp_key:
+        raise RuntimeError("EMAIL_PROVIDER=brevo but BREVO_SMTP_KEY is not set")
     logger.info("Email provider active: %s", provider)
 
 
 def _get_email_sender() -> EmailSender:
+    if settings.email_provider == "brevo":
+        if not settings.brevo_smtp_key:
+            raise ValueError("EMAIL_PROVIDER=brevo but BREVO_SMTP_KEY is empty")
+        return BrevoSender(settings.brevo_login, settings.brevo_smtp_key)
     if settings.email_provider == "resend":
         if not settings.resend_api_key:
             raise ValueError("EMAIL_PROVIDER=resend but RESEND_API_KEY is empty")
