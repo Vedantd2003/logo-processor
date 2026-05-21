@@ -9,6 +9,7 @@ class ProcessResponse(BaseModel):
     grayscale: Literal["generated", "failed"]
     email_status: Literal["sent", "failed", "pending"]
     message: str = ""
+    images: dict[str, str] = {}  # base64-encoded PNG for each output
 
 
 class HealthResponse(BaseModel):

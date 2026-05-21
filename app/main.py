@@ -1,9 +1,12 @@
+import base64
 import logging
+import shutil
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,7 +36,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend
 _frontend_dir = Path(__file__).parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(_frontend_dir)), name="static")
 
@@ -49,12 +51,8 @@ def _get_email_sender() -> EmailSender:
     )
 
 
-def _send_results_email(
-    request_id: str,
-    attachment_paths: list[Path],
-    email_status_holder: list[str],
-) -> None:
-    """Background task: send processed outputs as email attachments."""
+def _send_email(request_id: str, attachment_paths: list[Path]) -> str:
+    """Send email synchronously. Returns 'sent' or 'failed'."""
     try:
         sender = _get_email_sender()
         body = (
@@ -62,9 +60,9 @@ def _send_results_email(
             f"Request ID: {request_id}\n"
             f"Timestamp: {datetime.now(timezone.utc).isoformat()}\n\n"
             f"3 output images are attached:\n"
-            f"  • silhouette.png — solid filled outer shape\n"
-            f"  • border.png — edge/outline only\n"
-            f"  • grayscale.png — grayscale version\n"
+            f"  - silhouette.png — solid filled outer shape\n"
+            f"  - border.png    — edge/outline only\n"
+            f"  - grayscale.png — grayscale version\n"
         )
         sender.send(
             to=settings.recipient_email,
@@ -72,11 +70,11 @@ def _send_results_email(
             body=body,
             attachments=attachment_paths,
         )
-        email_status_holder[0] = "sent"
         logger.info("Email sent for request %s", request_id)
+        return "sent"
     except Exception as exc:
-        email_status_holder[0] = "failed"
         logger.error("Email failed for request %s: %s", request_id, exc)
+        return "failed"
 
 
 @app.get("/healthz", response_model=HealthResponse, tags=["System"])
@@ -92,64 +90,48 @@ async def index():
 
 @app.post("/process", response_model=ProcessResponse, tags=["Processing"])
 async def process_image(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PNG or JPG image, max 5 MB"),
 ) -> ProcessResponse:
     request_id = str(uuid.uuid4())
     logger.info("Processing request %s — file: %s", request_id, file.filename)
 
-    # Read and validate
     data = await file.read()
     try:
         validate_upload(file.filename or "", data, settings.max_upload_bytes)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Run CV pipeline inside a temp directory
-    # We can't keep temp dir open in background task (it gets cleaned up), so
-    # we copy files to a second temp dir for the email task.
-    import shutil
-    import tempfile
-
-    proc_results: dict = {}
-    email_paths: list[Path] = []
-    email_tmp = Path(tempfile.mkdtemp(prefix="logo_email_"))
-
+    tmp_dir = Path(tempfile.mkdtemp(prefix="logo_proc_"))
     try:
-        with temp_output_dir() as out_dir:
-            try:
-                proc_results = run_pipeline(data, out_dir)
-            except ValueError as exc:
-                raise HTTPException(status_code=422, detail=str(exc))
-            except RuntimeError as exc:
-                raise HTTPException(status_code=500, detail=str(exc))
+        try:
+            proc_results = run_pipeline(data, tmp_dir)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        except RuntimeError as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
 
-            # Copy outputs to persistent temp dir for background email task
-            for path in proc_results.values():
-                dest = email_tmp / path.name
-                shutil.copy2(path, dest)
-                email_paths.append(dest)
+        # Encode each output as base64 for inline preview in the response
+        images_b64: dict[str, str] = {}
+        for name, path in proc_results.items():
+            images_b64[name] = base64.b64encode(path.read_bytes()).decode()
+
+        # Send email synchronously so status is real in the response
+        attachment_paths = list(proc_results.values())
+        email_status = _send_email(request_id, attachment_paths)
 
     except HTTPException:
-        shutil.rmtree(email_tmp, ignore_errors=True)
         raise
-
-    # Mutable holder so the background task can record outcome
-    email_status_holder = ["pending"]
-
-    def _send_and_cleanup():
-        _send_results_email(request_id, email_paths, email_status_holder)
-        shutil.rmtree(email_tmp, ignore_errors=True)
-
-    background_tasks.add_task(_send_and_cleanup)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return ProcessResponse(
         request_id=request_id,
         silhouette="generated" if "silhouette" in proc_results else "failed",
         border="generated" if "border" in proc_results else "failed",
         grayscale="generated" if "grayscale" in proc_results else "failed",
-        email_status="pending",
-        message="Processing complete. Email is being sent in the background.",
+        email_status=email_status,
+        images=images_b64,
+        message="Processing complete.",
     )
 
 

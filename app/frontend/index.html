@@ -60,16 +60,12 @@
       border-radius: 6px;
       display: none;
     }
-    #status.ok { background: #14291a; border: 1px solid #1f6b30; color: #4ade80; }
+    #status.ok  { background: #14291a; border: 1px solid #1f6b30; color: #4ade80; }
     #status.err { background: #2a1010; border: 1px solid #6b1f1f; color: #f87171; }
-    #status.info { background: #1a1a2a; border: 1px solid #3b3b6b; color: #93c5fd; }
+    #status.info{ background: #1a1a2a; border: 1px solid #3b3b6b; color: #93c5fd; }
     .outputs { margin-top: 28px; display: none; }
     .outputs h2 { font-size: 0.9rem; color: #aaa; margin-bottom: 16px; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
     .thumb {
       background: #111;
       border: 1px solid #2d2d2d;
@@ -85,21 +81,21 @@
       background: repeating-conic-gradient(#222 0% 25%, #1a1a1a 0% 50%) 0 0 / 12px 12px;
     }
     .thumb span { display: block; font-size: 0.7rem; color: #666; margin-top: 6px; }
-    pre { font-size: 0.72rem; white-space: pre-wrap; word-break: break-all; }
-    a.dl {
+    .thumb a {
       display: inline-block;
-      margin-top: 4px;
+      margin-top: 5px;
       font-size: 0.68rem;
       color: #a78bfa;
       text-decoration: none;
     }
-    a.dl:hover { text-decoration: underline; }
+    .thumb a:hover { text-decoration: underline; }
+    pre { font-size: 0.72rem; white-space: pre-wrap; word-break: break-all; }
     #req-id { font-size: 0.72rem; color: #555; margin-top: 12px; }
   </style>
 </head>
 <body>
   <h1>Logo Processor</h1>
-  <p class="sub">Upload a logo → get silhouette, edge, and grayscale — emailed automatically.</p>
+  <p class="sub">Upload a logo &rarr; get silhouette, edge, and grayscale &mdash; emailed automatically.</p>
 
   <div class="card">
     <label for="fileInput">Select image (PNG or JPG, max 5 MB)</label>
@@ -115,14 +111,17 @@
       <div class="thumb">
         <img id="img-silhouette" src="" alt="silhouette" />
         <span>silhouette.png</span>
+        <a id="dl-silhouette" href="#" download="silhouette.png">download</a>
       </div>
       <div class="thumb">
         <img id="img-border" src="" alt="border" />
         <span>border.png</span>
+        <a id="dl-border" href="#" download="border.png">download</a>
       </div>
       <div class="thumb">
         <img id="img-grayscale" src="" alt="grayscale" />
         <span>grayscale.png</span>
+        <a id="dl-grayscale" href="#" download="grayscale.png">download</a>
       </div>
     </div>
   </div>
@@ -130,19 +129,15 @@
   <script>
     async function submit() {
       const fileInput = document.getElementById('fileInput');
-      const btn = document.getElementById('btn');
-      const statusEl = document.getElementById('status');
+      const btn       = document.getElementById('btn');
       const outputsEl = document.getElementById('outputs');
-      const reqIdEl = document.getElementById('req-id');
+      const reqIdEl   = document.getElementById('req-id');
 
-      if (!fileInput.files.length) {
-        showStatus('Please select a file first.', 'err');
-        return;
-      }
+      if (!fileInput.files.length) { showStatus('Please select a file first.', 'err'); return; }
 
       btn.disabled = true;
-      btn.textContent = 'Processing…';
-      showStatus('Uploading and processing…', 'info');
+      btn.textContent = 'Processing...';
+      showStatus('Uploading and processing — this may take a few seconds...', 'info');
       outputsEl.style.display = 'none';
       reqIdEl.textContent = '';
 
@@ -150,34 +145,46 @@
       formData.append('file', fileInput.files[0]);
 
       try {
-        const res = await fetch('/process', { method: 'POST', body: formData });
+        const res  = await fetch('/process', { method: 'POST', body: formData });
         const json = await res.json();
 
         if (!res.ok) {
-          showStatus(`Error ${res.status}: ${json.detail || JSON.stringify(json)}`, 'err');
+          showStatus('Error ' + res.status + ': ' + (json.detail || JSON.stringify(json)), 'err');
           return;
         }
 
-        reqIdEl.textContent = `Request ID: ${json.request_id}`;
+        reqIdEl.textContent = 'Request ID: ' + json.request_id;
+
+        const emailLine = json.email_status === 'sent'
+          ? 'Email sent with 3 attachments.'
+          : json.email_status === 'failed'
+            ? 'Email failed — check server logs.'
+            : 'Email: ' + json.email_status;
+
         showStatus(
-          `Processing complete.\nSilhouette: ${json.silhouette} | Border: ${json.border} | Grayscale: ${json.grayscale}\nEmail status: ${json.email_status}`,
-          'ok'
+          'Processing complete.\n'
+          + 'Silhouette: ' + json.silhouette
+          + ' | Border: '  + json.border
+          + ' | Grayscale: '+ json.grayscale + '\n'
+          + emailLine,
+          json.email_status === 'failed' ? 'err' : 'ok'
         );
 
-        // Show previews using the uploaded file for context
-        // The outputs are generated server-side; we display the original as a reference
-        // and indicate results were emailed.
-        outputsEl.style.display = 'block';
-        const file = fileInput.files[0];
-        const url = URL.createObjectURL(file);
-        // Display original in all 3 slots as placeholders with label
-        // (actual processed images are sent via email per spec)
-        document.getElementById('img-silhouette').src = url;
-        document.getElementById('img-border').src = url;
-        document.getElementById('img-grayscale').src = url;
+        // Display actual processed images from base64
+        if (json.images && Object.keys(json.images).length > 0) {
+          for (const name of ['silhouette', 'border', 'grayscale']) {
+            const b64 = json.images[name];
+            if (!b64) continue;
+            const src = 'data:image/png;base64,' + b64;
+            document.getElementById('img-' + name).src = src;
+            const dl = document.getElementById('dl-' + name);
+            dl.href = src;
+          }
+          outputsEl.style.display = 'block';
+        }
 
       } catch (err) {
-        showStatus(`Network error: ${err.message}`, 'err');
+        showStatus('Network error: ' + err.message, 'err');
       } finally {
         btn.disabled = false;
         btn.textContent = 'Process & Send Email';
@@ -188,7 +195,7 @@
       const el = document.getElementById('status');
       el.className = type;
       el.style.display = 'block';
-      el.innerHTML = `<pre>${msg}</pre>`;
+      el.innerHTML = '<pre>' + msg + '</pre>';
     }
   </script>
 </body>
