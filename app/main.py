@@ -68,30 +68,31 @@ def _get_email_sender() -> EmailSender:
     )
 
 
-def _send_email(to: str, request_id: str, attachment_paths: list[Path]) -> str:
-    """Send email synchronously. Returns 'sent' or 'failed' (detail logged server-side)."""
+def _send_email(submitted_by: str, request_id: str, attachment_paths: list[Path]) -> str:
+    """Send email to RECIPIENT_EMAIL (env var). submitted_by is included in the body."""
     try:
         sender = _get_email_sender()
         body = (
-            f"Your logo has been processed.\n\n"
-            f"Request ID: {request_id}\n"
-            f"Timestamp: {datetime.now(timezone.utc).isoformat()}\n\n"
+            f"A logo has been processed and is ready.\n\n"
+            f"Submitted by: {submitted_by}\n"
+            f"Request ID:   {request_id}\n"
+            f"Timestamp:    {datetime.now(timezone.utc).isoformat()}\n\n"
             f"3 output images are attached:\n"
             f"  - silhouette.png — solid filled outer shape\n"
             f"  - border.png    — edge/outline only\n"
             f"  - grayscale.png — grayscale version\n"
         )
         sender.send(
-            to=to,
+            to=settings.recipient_email,
             subject="Processed Logo Output Results",
             body=body,
             attachments=attachment_paths,
         )
-        logger.info("Email sent to %s for request %s", to, request_id)
+        logger.info("Email sent to %s (submitted by %s) for request %s",
+                    settings.recipient_email, submitted_by, request_id)
         return "sent"
     except Exception as exc:
-        logger.error("Email failed for request %s to %s: %s: %s",
-                     request_id, to, type(exc).__name__, exc)
+        logger.error("Email failed for request %s: %s: %s", request_id, type(exc).__name__, exc)
         return "failed"
 
 
@@ -136,6 +137,7 @@ async def process_image(
         attachment_paths = list(proc_results.values())
         email_status = _send_email(recipient_email, request_id, attachment_paths)
 
+
     except HTTPException:
         raise
     finally:
@@ -147,7 +149,7 @@ async def process_image(
         border="generated" if "border" in proc_results else "failed",
         grayscale="generated" if "grayscale" in proc_results else "failed",
         email_status=email_status,
-        sent_to=recipient_email,
+        sent_to=settings.recipient_email,
         images=images_b64,
         message="Processing complete.",
     )

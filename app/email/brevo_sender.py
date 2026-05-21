@@ -1,41 +1,39 @@
-import smtplib
-import ssl
-from email.message import EmailMessage
+import base64
+import httpx
 from pathlib import Path
 
 from .sender import EmailSender
 
-BREVO_HOST = "smtp-relay.brevo.com"
-BREVO_PORT = 587
+_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 class BrevoSender(EmailSender):
-    """Brevo (Sendinblue) SMTP relay — works from all cloud hosts."""
+    """Brevo transactional email via REST API — works from any cloud host."""
 
-    def __init__(self, login: str, smtp_key: str) -> None:
-        self.login = login      # your Brevo account email
-        self.smtp_key = smtp_key  # SMTP key from Brevo dashboard
+    def __init__(self, login: str, api_key: str) -> None:
+        self.login = login    # verified sender email in Brevo account
+        self.api_key = api_key  # xkeysib-... API key
 
     def send(self, to: str, subject: str, body: str, attachments: list[Path]) -> None:
-        msg = EmailMessage()
-        msg["From"] = self.login
-        msg["To"] = to
-        msg["Subject"] = subject
-        msg.set_content(body)
-
+        encoded = []
         for path in attachments:
-            with open(path, "rb") as f:
-                msg.add_attachment(
-                    f.read(),
-                    maintype="image",
-                    subtype="png",
-                    filename=path.name,
-                )
+            encoded.append({
+                "content": base64.b64encode(path.read_bytes()).decode(),
+                "name": path.name,
+            })
 
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP(BREVO_HOST, BREVO_PORT, timeout=30) as server:
-            server.ehlo()
-            server.starttls(context=ctx)
-            server.ehlo()
-            server.login(self.login, self.smtp_key)
-            server.send_message(msg)
+        payload = {
+            "sender": {"email": self.login, "name": "Logo Processor"},
+            "to": [{"email": to}],
+            "subject": subject,
+            "textContent": body,
+            "attachment": encoded,
+        }
+
+        response = httpx.post(
+            _API_URL,
+            json=payload,
+            headers={"api-key": self.api_key, "Content-Type": "application/json"},
+            timeout=30,
+        )
+        response.raise_for_status()
