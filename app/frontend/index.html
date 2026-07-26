@@ -4,188 +4,649 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Logo Processor</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; }
+    * { margin: 0; padding: 0; }
+    :root {
+      color-scheme: dark;
+      --bg: #101113;
+      --panel: #181a1f;
+      --panel-strong: #20232a;
+      --ink: #f4f1ea;
+      --muted: #a7adb8;
+      --quiet: #6f7785;
+      --line: #30343d;
+      --accent: #50d2c2;
+      --accent-strong: #f2b84b;
+      --danger: #ff7b7b;
+      --success: #7bd88f;
+      --radius: 8px;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+    }
+    html { scroll-behavior: auto; }
     body {
-      background: #0f0f0f;
-      color: #e0e0e0;
-      font-family: 'Courier New', monospace;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       min-height: 100vh;
-      padding: 40px 20px;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(80, 210, 194, 0.12), transparent 28rem),
+        radial-gradient(circle at 86% 28%, rgba(242, 184, 75, 0.08), transparent 24rem),
+        var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
     }
-    h1 { font-size: 1.6rem; color: #a78bfa; margin-bottom: 6px; }
-    p.sub { color: #888; font-size: 0.85rem; margin-bottom: 32px; }
-    .card {
-      background: #1a1a1a;
-      border: 1px solid #2d2d2d;
-      border-radius: 8px;
-      padding: 28px 32px;
-      width: 100%;
-      max-width: 560px;
+    a { color: inherit; }
+    button, input { font: inherit; }
+    .shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+    .nav {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
     }
-    label { display: block; font-size: 0.8rem; color: #aaa; margin-bottom: 6px; }
-    small { display: block; font-size: 0.72rem; color: #555; margin-bottom: 14px; }
-    input[type="email"],
-    input[type="file"] {
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border: 1px solid rgba(80, 210, 194, 0.6);
+      border-radius: var(--radius);
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, rgba(80, 210, 194, 0.18), rgba(242, 184, 75, 0.12));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    }
+    .brand-mark::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      background: conic-gradient(from 90deg, var(--accent), var(--accent-strong), var(--accent));
+    }
+    .nav-links { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 0.9rem; }
+    .nav-links a { text-decoration: none; transition: color 180ms ease; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--ink); }
+    .hero {
+      min-height: calc(100vh - 72px);
+      display: grid;
+      grid-template-columns: minmax(0, 0.86fr) minmax(360px, 1fr);
+      gap: clamp(28px, 5vw, 72px);
+      align-items: center;
+      padding: 28px 0 88px;
+    }
+    .hero-copy { max-width: 580px; }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: clamp(2.6rem, 7vw, 6.4rem);
+      line-height: 0.92;
+      letter-spacing: 0;
+      max-width: 8ch;
+    }
+    .sub {
+      margin-top: 22px;
+      max-width: 54ch;
+      color: var(--muted);
+      font-size: clamp(1rem, 2vw, 1.2rem);
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 34px;
+      max-width: 520px;
+    }
+    .metric {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    .metric strong { display: block; font-size: 1rem; }
+    .metric span { color: var(--quiet); font-size: 0.82rem; }
+    .panel {
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .upload-panel {
+      padding: clamp(18px, 3vw, 28px);
+      position: relative;
+      overflow: hidden;
+    }
+    .upload-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(80, 210, 194, 0.16), transparent 42%, rgba(242, 184, 75, 0.13));
+      opacity: 0.46;
+    }
+    .form-stack { position: relative; display: grid; gap: 18px; }
+    .field-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+    .field-label span:last-child { color: var(--quiet); font-weight: 600; font-size: 0.76rem; }
+    input[type="email"] {
       width: 100%;
-      background: #111;
-      border: 1px dashed #444;
-      border-radius: 6px;
-      padding: 12px 14px;
-      color: #ccc;
-      font-family: inherit;
-      font-size: 0.85rem;
+      min-height: 48px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #111317;
+      color: var(--ink);
+      padding: 0 14px;
+      outline: none;
+      transition: border-color 180ms ease, box-shadow 180ms ease;
+    }
+    input[type="email"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(80, 210, 194, 0.12);
+    }
+    .dropzone {
+      min-height: 226px;
+      border: 1px dashed #505763;
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+        #121419;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 118px;
+      gap: 18px;
+      align-items: center;
+      padding: 20px;
       cursor: pointer;
-      margin-bottom: 4px;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+      will-change: transform;
     }
-    input[type="email"] { cursor: text; margin-bottom: 4px; }
-    input[type="email"]:focus { outline: none; border-color: #7c3aed; }
-    button {
-      width: 100%;
-      background: #7c3aed;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      padding: 12px;
-      font-size: 0.95rem;
-      font-family: inherit;
-      cursor: pointer;
-      transition: background 0.2s;
-      margin-top: 16px;
+    .dropzone:hover,
+    .dropzone.is-dragover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+      background: rgba(80, 210, 194, 0.08);
     }
-    button:hover:not(:disabled) { background: #6d28d9; }
-    button:disabled { background: #3b2e5a; cursor: not-allowed; opacity: 0.6; }
-    #status {
-      margin-top: 20px;
-      font-size: 0.82rem;
-      padding: 12px 14px;
-      border-radius: 6px;
-      display: none;
-      line-height: 1.6;
-    }
-    #status.ok     { background: #14291a; border: 1px solid #1f6b30; color: #4ade80; }
-    #status.warn   { background: #292310; border: 1px solid #6b5a1f; color: #fbbf24; }
-    #status.err    { background: #2a1010; border: 1px solid #6b1f1f; color: #f87171; }
-    #status.info   { background: #1a1a2a; border: 1px solid #3b3b6b; color: #93c5fd; }
-    #req-id { font-size: 0.7rem; color: #444; margin-top: 10px; }
-    .outputs { margin-top: 28px; display: none; }
-    .outputs h2 { font-size: 0.9rem; color: #aaa; margin-bottom: 16px; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .thumb {
-      background: #111;
-      border: 1px solid #2d2d2d;
-      border-radius: 6px;
+    .dropzone.is-invalid { border-color: var(--danger); }
+    .drop-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 6px; }
+    .drop-copy { color: var(--muted); font-size: 0.92rem; max-width: 34ch; }
+    .file-meta { margin-top: 14px; color: var(--accent); font-size: 0.86rem; min-height: 1.3em; }
+    .preview-frame {
+      width: 118px;
+      aspect-ratio: 1;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: repeating-conic-gradient(#242830 0% 25%, #191c22 0% 50%) 0 0 / 14px 14px;
+      display: grid;
+      place-items: center;
+      color: var(--quiet);
+      font-size: 0.75rem;
       text-align: center;
-      padding: 10px 6px 8px;
+    }
+    .preview-frame img { width: 100%; height: 100%; object-fit: contain; display: none; }
+    input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .action {
+      min-height: 52px;
+      border: 0;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, var(--accent), #41a99e);
+      color: #061010;
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform 180ms ease, filter 180ms ease, opacity 180ms ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .action:hover:not(:disabled), .action:focus-visible:not(:disabled) { transform: translateY(-2px); filter: brightness(1.05); }
+    .action:disabled { cursor: not-allowed; opacity: 0.48; }
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      background: #101216;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      display: none;
+    }
+    .progress span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+      transform-origin: left;
+    }
+    #status {
+      display: none;
+      white-space: pre-line;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-size: 0.92rem;
+      border: 1px solid var(--line);
+      background: #111317;
+    }
+    #status.ok { border-color: rgba(123, 216, 143, 0.45); color: var(--success); }
+    #status.warn { border-color: rgba(242, 184, 75, 0.5); color: var(--accent-strong); }
+    #status.err { border-color: rgba(255, 123, 123, 0.5); color: var(--danger); }
+    #status.info { border-color: rgba(80, 210, 194, 0.42); color: var(--accent); }
+    #req-id { min-height: 1.2em; color: var(--quiet); font-size: 0.78rem; overflow-wrap: anywhere; }
+    .outputs {
+      display: none;
+      margin: -42px auto 88px;
+      padding: 26px;
+    }
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .section-head h2 { font-size: clamp(1.35rem, 3vw, 2rem); }
+    .section-head p { color: var(--muted); max-width: 40ch; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .thumb {
+      min-width: 0;
+      background: #121419;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
     }
     .thumb img {
       width: 100%;
       aspect-ratio: 1;
       object-fit: contain;
-      border-radius: 4px;
-      background: repeating-conic-gradient(#222 0% 25%, #1a1a1a 0% 50%) 0 0 / 12px 12px;
+      border-radius: 6px;
+      background: repeating-conic-gradient(#242830 0% 25%, #191c22 0% 50%) 0 0 / 14px 14px;
     }
-    .thumb span { display: block; font-size: 0.7rem; color: #666; margin-top: 6px; }
-    .thumb a { display: inline-block; margin-top: 4px; font-size: 0.68rem; color: #a78bfa; text-decoration: none; }
-    .thumb a:hover { text-decoration: underline; }
+    .thumb footer {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+    .thumb a {
+      color: var(--accent);
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .info-band {
+      padding: 76px 0 96px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.018);
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .step {
+      padding: 20px;
+      min-height: 170px;
+      background: rgba(24, 26, 31, 0.7);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+    .step span { color: var(--accent-strong); font-weight: 900; font-size: 0.82rem; }
+    .step h3 { margin: 12px 0 8px; font-size: 1.05rem; }
+    .step p { color: var(--muted); font-size: 0.92rem; }
+    @media (max-width: 860px) {
+      .nav { align-items: flex-start; flex-direction: column; justify-content: center; padding: 18px 0; }
+      .hero { min-height: auto; grid-template-columns: 1fr; padding: 32px 0 82px; }
+      h1 { max-width: 10ch; }
+      .outputs { margin-top: -36px; }
+      .grid, .steps { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 24px, 1120px); }
+      .nav-links { width: 100%; justify-content: space-between; font-size: 0.82rem; }
+      .metrics { grid-template-columns: 1fr; }
+      .dropzone { grid-template-columns: 1fr; min-height: 270px; }
+      .preview-frame { width: 100%; max-width: 180px; }
+      .section-head { display: grid; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+      }
+      .dropzone:hover,
+      .dropzone.is-dragover,
+      .action:hover:not(:disabled),
+      .action:focus-visible:not(:disabled) { transform: none; }
+    }
   </style>
 </head>
 <body>
-  <h1>Logo Processor</h1>
-  <p class="sub">Upload a logo &rarr; get silhouette, edge, and grayscale &mdash; emailed automatically.</p>
-
-  <div class="card">
-    <label for="recipientEmail">Send processed images to:</label>
-    <input type="email" id="recipientEmail" placeholder="your@email.com" required />
-    <small>We'll email your 3 processed images to this address.</small>
-
-    <label for="fileInput">Select image (PNG or JPG, max 5 MB):</label>
-    <input type="file" id="fileInput" accept="image/png,image/jpeg" />
-
-    <button id="btn" disabled onclick="submit()">Process &amp; Send Email</button>
-    <div id="status"></div>
-    <p id="req-id"></p>
-  </div>
-
-  <div class="outputs card" id="outputs" style="margin-top:20px;">
-    <h2>Generated Outputs</h2>
-    <div class="grid">
-      <div class="thumb">
-        <img id="img-silhouette" src="" alt="silhouette" />
-        <span>silhouette.png</span>
-        <a id="dl-silhouette" href="#" download="silhouette.png">download</a>
-      </div>
-      <div class="thumb">
-        <img id="img-border" src="" alt="border" />
-        <span>border.png</span>
-        <a id="dl-border" href="#" download="border.png">download</a>
-      </div>
-      <div class="thumb">
-        <img id="img-grayscale" src="" alt="grayscale" />
-        <span>grayscale.png</span>
-        <a id="dl-grayscale" href="#" download="grayscale.png">download</a>
-      </div>
+  <header class="shell nav" data-animate="load">
+    <div class="brand" aria-label="Logo Processor">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>Logo Processor</span>
     </div>
-  </div>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#upload">Upload</a>
+      <a href="#outputs">Outputs</a>
+      <a href="#process">Process</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="shell hero">
+      <div class="hero-copy" data-animate="load">
+        <p class="eyebrow">Computer vision logo cleanup</p>
+        <h1>Logo Processor</h1>
+        <p class="sub">Upload a PNG or JPG and receive silhouette, border, and grayscale outputs by email, with instant previews when processing completes.</p>
+        <div class="metrics" aria-label="Processing summary">
+          <div class="metric"><strong>3 outputs</strong><span>silhouette, border, grayscale</span></div>
+          <div class="metric"><strong>5 MB</strong><span>client courtesy limit</span></div>
+          <div class="metric"><strong>Safe preview</strong><span>object URLs revoked after use</span></div>
+        </div>
+      </div>
+
+      <section class="panel upload-panel" id="upload" aria-label="Upload logo form" data-animate="load">
+        <div class="form-stack">
+          <div>
+            <label class="field-label" for="recipientEmail">
+              <span>Email destination</span>
+              <span>required</span>
+            </label>
+            <input type="email" id="recipientEmail" placeholder="your@email.com" autocomplete="email" required />
+          </div>
+
+          <div>
+            <label class="field-label" for="fileInput">
+              <span>Logo file</span>
+              <span>PNG or JPG</span>
+            </label>
+            <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-describedby="fileHelp">
+              <div>
+                <p class="drop-title">Drop your logo here</p>
+                <p class="drop-copy" id="fileHelp">Choose or drag a PNG/JPG up to 5 MB. SVG files are not previewed or uploaded by this client UI.</p>
+                <p class="file-meta" id="fileMeta">No file selected</p>
+              </div>
+              <div class="preview-frame" aria-live="polite">
+                <span id="previewEmpty">Preview</span>
+                <img id="previewImage" alt="Selected logo preview" />
+              </div>
+            </div>
+            <input type="file" id="fileInput" accept="image/png,image/jpeg" />
+          </div>
+
+          <button class="action magnetic" id="btn" disabled type="button">Process and Send Email</button>
+          <div class="progress" id="progress" aria-hidden="true"><span id="progressBar"></span></div>
+          <div id="status" role="status" aria-live="polite"></div>
+          <p id="req-id"></p>
+        </div>
+      </section>
+    </section>
+
+    <section class="shell panel outputs" id="outputs" aria-label="Generated outputs">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Generated outputs</p>
+          <h2>Your processed logo set</h2>
+        </div>
+        <p>Download the generated PNGs here. The same files are sent to the email address you entered.</p>
+      </div>
+      <div class="grid">
+        <article class="thumb">
+          <img id="img-silhouette" src="" alt="Silhouette output" />
+          <footer><span>silhouette.png</span><a class="magnetic" id="dl-silhouette" href="#" download="silhouette.png">Download</a></footer>
+        </article>
+        <article class="thumb">
+          <img id="img-border" src="" alt="Border output" />
+          <footer><span>border.png</span><a class="magnetic" id="dl-border" href="#" download="border.png">Download</a></footer>
+        </article>
+        <article class="thumb">
+          <img id="img-grayscale" src="" alt="Grayscale output" />
+          <footer><span>grayscale.png</span><a class="magnetic" id="dl-grayscale" href="#" download="grayscale.png">Download</a></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="info-band" id="process">
+      <div class="shell">
+        <div class="section-head reveal">
+          <div>
+            <p class="eyebrow">Processing flow</p>
+            <h2>One upload, three useful logo assets.</h2>
+          </div>
+          <p>Frontend checks provide quick feedback only. The FastAPI backend remains responsible for real file validation and image processing.</p>
+        </div>
+        <div class="steps">
+          <article class="step reveal"><span>01</span><h3>Validate</h3><p>The client checks type and size before upload for a faster, friendlier error path.</p></article>
+          <article class="step reveal"><span>02</span><h3>Process</h3><p>The existing `/process` endpoint receives unchanged multipart form data and returns the current JSON contract.</p></article>
+          <article class="step reveal"><span>03</span><h3>Reveal</h3><p>Returned base64 PNGs animate into place and stay available as downloads.</p></article>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <script>
-    const emailEl   = document.getElementById('recipientEmail');
-    const fileEl    = document.getElementById('fileInput');
-    const btn       = document.getElementById('btn');
+    // Frontend-only upload controller. It keeps the existing backend contract:
+    // POST /process with multipart fields { recipient_email, file }, expecting request_id,
+    // sent_to, email_status, silhouette, border, grayscale, and images base64 PNGs.
+    const MAX_FILE_BYTES = 5 * 1024 * 1024;
+    const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg']);
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const emailEl = document.getElementById('recipientEmail');
+    const fileEl = document.getElementById('fileInput');
+    const btn = document.getElementById('btn');
+    const dropzone = document.getElementById('dropzone');
+    const fileMeta = document.getElementById('fileMeta');
+    const previewImage = document.getElementById('previewImage');
+    const previewEmpty = document.getElementById('previewEmpty');
+    const progress = document.getElementById('progress');
+    const progressBar = document.getElementById('progressBar');
+    const outputsEl = document.getElementById('outputs');
+    const reqIdEl = document.getElementById('req-id');
+    let selectedFile = null;
+    let previewUrl = '';
+
+    function initMotion() {
+      // Motion is progressive enhancement; reduced-motion users get immediate state changes.
+      if (prefersReducedMotion || !window.gsap) return;
+
+      if (window.ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
+
+      // Lenis smooths wheel/touch scrolling without changing native keyboard navigation.
+      if (window.Lenis) {
+        const lenis = new Lenis({ duration: 0.9, smoothWheel: true });
+        function raf(time) {
+          lenis.raf(time);
+          requestAnimationFrame(raf);
+        }
+        requestAnimationFrame(raf);
+      }
+
+      // A short stagger gives the first viewport a clear load order without delaying use.
+      gsap.from('[data-animate="load"]', {
+        autoAlpha: 0,
+        y: 22,
+        duration: 0.72,
+        stagger: 0.11,
+        ease: 'power3.out'
+      });
+
+      gsap.utils.toArray('.reveal').forEach((item) => {
+        gsap.from(item, {
+          autoAlpha: 0,
+          y: 26,
+          duration: 0.64,
+          ease: 'power2.out',
+          scrollTrigger: { trigger: item, start: 'top 82%' }
+        });
+      });
+
+      document.querySelectorAll('.magnetic').forEach((el) => {
+        el.addEventListener('pointerenter', () => gsap.to(el, { scale: 1.025, duration: 0.18, ease: 'power2.out' }));
+        el.addEventListener('pointerleave', () => gsap.to(el, { x: 0, y: 0, scale: 1, duration: 0.24, ease: 'power2.out' }));
+        el.addEventListener('pointermove', (event) => {
+          const rect = el.getBoundingClientRect();
+          gsap.to(el, {
+            x: (event.clientX - rect.left - rect.width / 2) * 0.08,
+            y: (event.clientY - rect.top - rect.height / 2) * 0.12,
+            duration: 0.2,
+            ease: 'power2.out'
+          });
+        });
+      });
+    }
+
+    function setBusy(isBusy) {
+      btn.disabled = isBusy || !isReady();
+      btn.textContent = isBusy ? 'Processing...' : 'Process and Send Email';
+      progress.style.display = isBusy ? 'block' : 'none';
+      if (isBusy) {
+        progressBar.style.width = '0%';
+        if (window.gsap && !prefersReducedMotion) {
+          gsap.to(progressBar, { width: '82%', duration: 1.1, ease: 'power2.out' });
+        } else {
+          progressBar.style.width = '82%';
+        }
+      }
+    }
+
+    function isReady() {
+      return emailEl.checkValidity() && Boolean(selectedFile);
+    }
 
     function checkReady() {
-      btn.disabled = !(emailEl.checkValidity() && fileEl.files.length > 0);
+      btn.disabled = !isReady();
     }
-    emailEl.addEventListener('input', checkReady);
-    fileEl.addEventListener('change', checkReady);
+
+    function formatBytes(bytes) {
+      return bytes < 1024 * 1024
+        ? `${Math.round(bytes / 1024)} KB`
+        : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function clearPreview() {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = '';
+      previewImage.removeAttribute('src');
+      previewImage.style.display = 'none';
+      previewEmpty.style.display = 'block';
+    }
+
+    function validateFile(file) {
+      // This is a UX courtesy, not a security boundary. The backend MIME/byte
+      // validation in app/utils/validators.py remains the authoritative control.
+      if (!file) return 'Choose a PNG or JPG logo first.';
+      if (!ALLOWED_TYPES.has(file.type)) return 'Only PNG and JPG files are accepted here.';
+      if (file.size > MAX_FILE_BYTES) return 'File is over the 5 MB upload limit.';
+      return '';
+    }
+
+    function setFile(file) {
+      const validationError = validateFile(file);
+      clearPreview();
+      selectedFile = null;
+      dropzone.classList.toggle('is-invalid', Boolean(validationError));
+
+      if (validationError) {
+        fileMeta.textContent = validationError;
+        showStatus(validationError, 'err');
+        checkReady();
+        return;
+      }
+
+      selectedFile = file;
+      fileMeta.textContent = `${file.name} - ${formatBytes(file.size)}`;
+      previewUrl = URL.createObjectURL(file);
+      previewImage.src = previewUrl;
+      previewImage.onload = () => {
+        previewImage.style.display = 'block';
+        previewEmpty.style.display = 'none';
+        if (window.gsap && !prefersReducedMotion) {
+          gsap.fromTo(previewImage, { autoAlpha: 0, scale: 0.94 }, { autoAlpha: 1, scale: 1, duration: 0.32, ease: 'power2.out' });
+        }
+      };
+      showStatus('Ready to process.', 'info');
+      checkReady();
+    }
+
+    function showStatus(msg, type) {
+      const el = document.getElementById('status');
+      el.className = type;
+      el.style.display = 'block';
+      el.textContent = msg;
+      if (window.gsap && !prefersReducedMotion) {
+        gsap.fromTo(el, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.24, ease: 'power2.out' });
+      }
+    }
+
+    function revealOutputs() {
+      outputsEl.style.display = 'block';
+      if (window.gsap && !prefersReducedMotion) {
+        gsap.fromTo(outputsEl, { autoAlpha: 0, y: 26 }, { autoAlpha: 1, y: 0, duration: 0.52, ease: 'power3.out' });
+        gsap.fromTo('.thumb', { autoAlpha: 0, y: 18, scale: 0.98 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.42, stagger: 0.08, ease: 'power2.out' });
+      }
+    }
 
     async function submit() {
-      const outputsEl = document.getElementById('outputs');
-      const reqIdEl   = document.getElementById('req-id');
+      const validationError = validateFile(selectedFile);
+      if (validationError) {
+        showStatus(validationError, 'err');
+        checkReady();
+        return;
+      }
 
-      btn.disabled = true;
-      btn.textContent = 'Processing...';
-      showStatus('Uploading and processing — this may take a few seconds...', 'info');
+      setBusy(true);
+      showStatus('Uploading and processing. This usually takes a few seconds...', 'info');
       outputsEl.style.display = 'none';
       reqIdEl.textContent = '';
 
       const formData = new FormData();
       formData.append('recipient_email', emailEl.value.trim());
-      formData.append('file', fileEl.files[0]);
+      formData.append('file', selectedFile);
 
       try {
-        const res  = await fetch('/process', { method: 'POST', body: formData });
+        const res = await fetch('/process', { method: 'POST', body: formData });
         const json = await res.json();
 
         if (!res.ok) {
-          showStatus('Error ' + res.status + ': ' + (json.detail || 'Unknown error.'), 'err');
+          showStatus(`Error ${res.status}: ${json.detail || 'Unknown error.'}`, 'err');
           return;
         }
 
-        reqIdEl.textContent = 'Request ID: ' + json.request_id;
+        progressBar.style.width = '100%';
+        reqIdEl.textContent = `Request ID: ${json.request_id}`;
 
         if (json.email_status === 'sent') {
-          const sentTo = json.sent_to || emailEl.value;
           showStatus(
-            'Processing complete.\n'
-            + 'Silhouette: ' + json.silhouette
-            + ' | Border: '  + json.border
-            + ' | Grayscale: '+ json.grayscale + '\n'
-            + 'Sent to: ' + sentTo,
+            `Processing complete.\nSilhouette: ${json.silhouette} | Border: ${json.border} | Grayscale: ${json.grayscale}\nSent to: ${json.sent_to || emailEl.value}`,
             'ok'
           );
         } else {
-          // Processing worked but email failed — amber, no stack trace exposed
-          console.error('Email failure detail (server logged):', json);
           showStatus(
-            'Processing complete.\n'
-            + 'Silhouette: ' + json.silhouette
-            + ' | Border: '  + json.border
-            + ' | Grayscale: '+ json.grayscale + '\n'
-            + 'Email could not be sent. Please contact the site owner.',
+            `Processing complete.\nSilhouette: ${json.silhouette} | Border: ${json.border} | Grayscale: ${json.grayscale}\nEmail could not be sent. Please contact the site owner.`,
             'warn'
           );
         }
@@ -194,30 +655,48 @@
           for (const name of ['silhouette', 'border', 'grayscale']) {
             const b64 = json.images[name];
             if (!b64) continue;
-            const src = 'data:image/png;base64,' + b64;
-            document.getElementById('img-' + name).src = src;
-            const dl = document.getElementById('dl-' + name);
-            dl.href = src;
+            const src = `data:image/png;base64,${b64}`;
+            document.getElementById(`img-${name}`).src = src;
+            document.getElementById(`dl-${name}`).href = src;
           }
-          outputsEl.style.display = 'block';
+          revealOutputs();
         }
-
       } catch (err) {
-        console.error(err);
-        showStatus('Network error — please try again.', 'err');
+        showStatus('Network error. Please try again.', 'err');
       } finally {
-        btn.disabled = false;
-        btn.textContent = 'Process & Send Email';
+        setBusy(false);
         checkReady();
       }
     }
 
-    function showStatus(msg, type) {
-      const el = document.getElementById('status');
-      el.className = type;
-      el.style.display = 'block';
-      el.textContent = msg;
-    }
+    emailEl.addEventListener('input', checkReady);
+    fileEl.addEventListener('change', () => setFile(fileEl.files[0]));
+    btn.addEventListener('click', submit);
+    dropzone.addEventListener('click', () => fileEl.click());
+    dropzone.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        fileEl.click();
+      }
+    });
+    ['dragenter', 'dragover'].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.add('is-dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.remove('is-dragover');
+      });
+    });
+    dropzone.addEventListener('drop', (event) => {
+      const file = event.dataTransfer.files[0];
+      if (file) setFile(file);
+    });
+    window.addEventListener('beforeunload', clearPreview);
+    window.addEventListener('load', initMotion);
   </script>
 </body>
 </html>
