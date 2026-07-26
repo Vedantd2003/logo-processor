@@ -65,14 +65,23 @@ class SilhouetteProcessor(ImageProcessor):
 
         # Step 4: keep only the largest contour(s) — filters out noise blobs
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if contours:
-            # Sort by area descending, keep contours that are at least 5% of the largest
-            contours = sorted(contours, key=cv2.contourArea, reverse=True)
-            max_area = cv2.contourArea(contours[0])
-            contours = [c for c in contours if cv2.contourArea(c) >= 0.05 * max_area]
-
+        
         # Step 5: draw solid fill on white background
         canvas = np.ones((h, w, 3), dtype=np.uint8) * 255
-        cv2.drawContours(canvas, contours, -1, (0, 0, 0), thickness=cv2.FILLED)
+        
+        if contours:
+            # Sort by area descending, keep contours that are at least 5% of the largest
+            contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
+            max_area = cv2.contourArea(contours_sorted[0])
+            contours_filtered = [c for c in contours_sorted if cv2.contourArea(c) >= 0.05 * max_area]
+            
+            if contours_filtered:
+                cv2.drawContours(canvas, contours_filtered, -1, (0, 0, 0), thickness=cv2.FILLED)
+            else:
+                # Fallback: if all contours were filtered out, use the largest one anyway
+                cv2.drawContours(canvas, [contours_sorted[0]], -1, (0, 0, 0), thickness=cv2.FILLED)
+        else:
+            # No contours found at all - use the mask directly as fallback
+            canvas[mask > 0] = [0, 0, 0]
 
         return canvas
